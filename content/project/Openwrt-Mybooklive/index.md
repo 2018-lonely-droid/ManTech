@@ -1,0 +1,798 @@
+---
+date: "2020-04-17T00:00:00Z"
+external_link: null
+image:
+  caption: ""
+  focal_point: Smart
+summary: How to install Openwrt on your WD Mybooklive
+tags:
+- Router
+title: How to install Openwrt on Western Digital My Book Live (2011 ed.)
+---
+
+I originally used the guide written up by Brian, but this uses an older depreciated version of Openwrt from 2017. 
+
+His work is linked [HERE](https://gist.github.com/braian87b/84802005e61f7080620b2d522b804f0d)
+
+
+I have modified his code some for the updated 19.04 version of Openwrt:
+
+```
+# Instructions to Install OpenWRT or LEDE on WD MBL Western Digital MyBookLive (Tested on Single, but it should work on Duo too)
+
+# Recommended to use a Linux / Debian box with wget, dd, gunzip, lsblk
+# Using a Debian box (it could be a VM) with the harddrive connected (it could be a minimal net-install Debian)
+See ip with:
+ip addr show
+# connect remotely using:
+user@outside:~/# ssh user@10.211.55.6
+# We elevate permissions or even better install and config sudo
+user@debian8vm:~/# su
+root@debian8vm:~/# apt-get install sudo -y
+root@debian8vm:~/# sudo adduser user sudo
+user@debian8vm:~/# exit
+root@debian8vm:~/# exit
+user@outside:~/# ssh user@10.211.55.6
+user@debian8vm:~/# sudo su
+# install miscelaneous
+root@debian8vm:~/# apt-get install u-boot-tools parted gdisk -y
+# Should be already installed
+root@debian8vm:~/# apt-get install wget tar -y
+# if we want to read the hardware description table file
+root@debian8vm:~/# apt-get install device-tree-compiler-y
+
+# First, wget the file:
+
+# Links of Lede 17.01.1 to 17.01.4 for Single and Duo
+wget http://downloads.lede-project.org/releases/17.01.1/targets/apm821xx/sata/lede-17.01.1-apm821xx-sata-MyBookLiveSingle-ext4-rootfs.img.gz
+wget http://downloads.lede-project.org/releases/17.01.1/targets/apm821xx/sata/lede-17.01.1-apm821xx-sata-MyBookLiveDuo-ext4-rootfs.img.gz
+
+wget http://downloads.lede-project.org/releases/17.01.2/targets/apm821xx/sata/lede-17.01.2-apm821xx-sata-MyBookLiveSingle-ext4-rootfs.img.gz
+wget http://downloads.lede-project.org/releases/17.01.2/targets/apm821xx/sata/lede-17.01.2-apm821xx-sata-MyBookLiveDuo-ext4-rootfs.img.gz
+
+wget http://downloads.lede-project.org/releases/17.01.3/targets/apm821xx/sata/lede-17.01.3-apm821xx-sata-MyBookLiveSingle-ext4-rootfs.img.gz
+wget http://downloads.lede-project.org/releases/17.01.3/targets/apm821xx/sata/lede-17.01.3-apm821xx-sata-MyBookLiveDuo-ext4-rootfs.img.gz
+
+wget http://downloads.lede-project.org/releases/17.01.4/targets/apm821xx/sata/lede-17.01.4-apm821xx-sata-MyBookLiveSingle-ext4-rootfs.img.gz
+wget http://downloads.lede-project.org/releases/17.01.4/targets/apm821xx/sata/lede-17.01.4-apm821xx-sata-MyBookLiveDuo-ext4-rootfs.img.gz
+# OpenWRT Rebranding:
+wget http://downloads.openwrt.org/releases/17.01.4/targets/apm821xx/sata/lede-17.01.4-apm821xx-sata-MyBookLiveSingle-ext4-rootfs.img.gz
+wget http://downloads.openwrt.org/releases/17.01.4/targets/apm821xx/sata/lede-17.01.4-apm821xx-sata-MyBookLiveDuo-ext4-rootfs.img.gz
+
+# Another location from a mirror (because lede-project.org was offline when rebranding to OpenWRT)
+wget http://ftp.halifax.rwth-aachen.de/lede/releases/17.01.4/targets/apm821xx/sata/lede-17.01.4-apm821xx-sata-MyBookLiveSingle-ext4-rootfs.img.gz
+
+# See in http://downloads.lede-project.org/releases/ or https://downloads.openwrt.org/releases/ if there is a new release and follow the common path:
+/targets/apm821xx/sata/[VERSION]-apm821xx-sata-MyBookLiveSingle-ext4-rootfs.img.gz
+/targets/apm821xx/sata/[VERSION]-apm821xx-sata-MyBookLiveDuo-ext4-rootfs.img.gz
+
+# Now we gunzip the file:
+gunzip lede-*-apm821xx-sata-MyBookLive*-ext4-rootfs.img.gz
+
+# Now use lsblk or any tool you like to check the connected HardDrive (there is no problem if it has info or not, but partition table and first about 256mb of disk data will be lost)
+# The drive could be connected using USB, it should work (I tested)
+
+# Command to write image to the drive, for example for /dev/sdb (PLEASE DOUBLE CHECK TO AVOID WRITING TO AN UNWANTED DRIVE!)
+dd if=lede-*-apm821xx-sata-MyBookLive*-ext4-rootfs.img of=/dev/sdb
+# Or using pv (to see progress of copying)
+IMAGE=`echo lede-*-apm821xx-sata-MyBookLive*-ext4-rootfs.img`
+dd if=$IMAGE of=/dev/sdb
+apt-get install pv
+dd if=$IMAGE | pv | dd of=/dev/sdb
+
+# Skip this step if you are UPGRADING your MBL drive, if this is the first time, then you can continue below
+# This will use the MBR layout from the image and copy it to the GPT
+# If you had a previous GPT layout then you need to SKIP this step, and plug the drive on the MBL
+# and run gdisk from the MBL to recover the previous GPT or recreate exactly equal as before to get access to your data again.
+root@debian8vm:~# gdisk /dev/sdb
+## GPT fdisk (gdisk) version 0.8.10
+##
+## Partition table scan:
+##   MBR: MBR only
+##   BSD: not present
+##   APM: not present
+##   GPT: not present
+##
+##
+## ***************************************************************
+## Found invalid GPT and valid MBR; converting MBR to GPT format
+## in memory. THIS OPERATION IS POTENTIALLY DESTRUCTIVE! Exit by
+## typing 'q' if you don't want to convert your MBR partitions
+## to GPT format!
+## ***************************************************************
+##
+##
+# Since we WANT to convert/copy the MBR layout into GPT (later we will add our custom partitions manually)
+Command (? for help): w
+##
+## Final checks complete. About to write GPT data. THIS WILL OVERWRITE EXISTING
+## PARTITIONS!!
+##
+## Do you want to proceed? (Y/N): y
+## OK; writing new GUID partition table (GPT) to /dev/sdb.
+## The operation has completed successfully.
+
+
+# Run `sync` and disconnect the drive, and put in on the MyBookLive box
+sync
+# Now MyBookLive will have DHCP running so you could connect it first directly to your computer,
+# or change your computer ip range to 192.168.1.5 and gateway 192.168.1.1
+# if you connect to existing network (if you have your current gateway on other IP,
+# if you have on same IP you need to connect to your computer first)
+
+# Connect using ssh:
+ssh root@192.168.1.1
+
+# We disable DHCP Server and configure as DHCP client:
+uci set dhcp.lan.ignore='1'
+uci del dhcp.lan.dhcpv6
+uci del dhcp.lan.ra
+uci del dhcp.lan.ra_management
+uci del dhcp.lan.ra_default
+uci set network.lan.proto='dhcp'
+uci del network.lan.ipaddr
+uci del network.lan.netmask
+uci del network.lan.type # not a bridge (not necessity), now is eth0
+# Add IPv6 client
+uci set network.lan6=interface # enable IPv6
+uci set network.lan6.ifname='eth0'
+uci set network.lan6.proto='dhcpv6'
+# Recommended, but you will need bring up the iface manually when you want to use it
+uci set network.lan6.auto='0' # run `ifup lan6` (ifdown) or clic on "Connect" (disconnect) on Luci to get IP's
+uci add_list firewall.@zone[0].network='lan6'
+
+# Test everything:
+/etc/init.d/odhcpd restart
+/etc/init.d/dnsmasq restart
+/etc/init.d/network restart
+/etc/init.d/firewall restart
+
+# Now you could connect the MyBookLive to your existing network and check the new IP of the MBL
+# If there is some problem reboot the box.
+
+# if everything is ok then:
+uci commit dhcp
+uci commit network
+uci commit firewall
+uci commit ; sync
+
+
+# Now onnect again using SSH to the new IP address give by the DHCP server on your network.
+
+opkg update
+
+opkg find *partition*
+##cgdisk - 1.0.1-1 - ncurses-based partition table manipulation utility with GPT support.
+## Similar to sfdisk, but works with GPT partitions. Shares the same limitations
+## of the gdisk partition utility. While it can read and convert MBR partitions
+## in GPT, it cannot modify MBR partitions on its own.
+##gdisk - 1.0.1-1 - GPT partition table manipulation utility with an interface
+## similar to fdisk. It can read and convert MBR partitions in GPT
+## but is otherwise unable to generate or modify MBR partitions.
+##kmod-mtd-rw - 4.4.61+git-20160214-1 - A kernel module that temporarily makes all MTD partitions writeable.
+##libblkid - 2.29.2-1 - The libblkid library is used to identify block devices (disks) as to their
+## content (e.g. filesystem type, partitions) as well as extracting additional
+## information such as filesystem labels/volume names, partitions, unique
+## identifiers/serial numbers...
+##sfdisk - 2.29.2-1 - list the size of a partition, list the partitions on a device, check the
+## partitions on a device and repartition a device
+##sgdisk - 1.0.1-1 - Script-friendly GPT partition table manipulation utility.
+## It can read and convert MBR partitions in GPT but is otherwise
+## unable to generate or modify MBR partitions.
+## To the contrary of gdisk, its interface is geared towards scripts,
+## so it takes command line arguments instead of being interactive.
+## It will NOT ask confirmation before carrying out the operations.
+## It has a slightly smaller footprint than gdisk tool.
+
+#opkg install cgdisk
+#cgdisk /dev/sda # it does not work!
+
+# If you need, we look for partition to see current layout (to check later against gdisk)
+# root@LEDE:~# fdisk -l /dev/sda
+## Disk /dev/sda: 5.5 TiB, 6001175126016 bytes, 11721045168 sectors
+## Units: sectors of 1 * 512 = 512 bytes
+## Sector size (logical/physical): 512 bytes / 4096 bytes
+## I/O size (minimum/optimal): 4096 bytes / 4096 bytes
+## Disklabel type: dos
+## Disk identifier: 0x5452574f
+##
+## Device     Boot Start    End Sectors  Size Id Type
+## /dev/sda1  *     8192  24575   16384    8M 83 Linux
+## /dev/sda2       32768 557055  524288  256M 83 Linux
+
+# We will use gdisk to create partitions or recover previous GPT, so far it worked just fine.
+opkg install gdisk
+gdisk /dev/sda
+
+
+## GPT fdisk (gdisk) version 1.0.1
+##
+## Type device filename, or press <Enter> to exit: /dev/sda
+## Caution: invalid main GPT header, but valid backup; regenerating main header
+## from backup!
+##
+## Caution! After loading partitions, the CRC doesn't check out!
+## Warning! Main partition table CRC mismatch! Loaded backup partition table
+## instead of main partition table!
+##
+## Warning! One or more CRCs don't match. You should repair the disk!
+##
+## Partition table scan:
+##   MBR: MBR only
+##   BSD: not present
+##   APM: not present
+##   GPT: damaged
+##
+## Found valid MBR and corrupt GPT. Which do you want to use? (Using the
+## GPT MAY permit recovery of GPT data.)
+##  1 - MBR
+##  2 - GPT
+##  3 - Create blank GPT
+##
+## Your answer:
+
+# Here If we updated using another `dd` image then we could choose option 2
+# since the partition table on GPT is correct and we could see current data on 3rd partition.
+# If this is the first time we use the disk with LEDE using `dd` we should choose 1
+# and write layour copied from MBR
+
+Command (? for help): 1 #-> Careful, Here it uses MBR and copies its layout
+## Your answer: 1
+##
+Command (? for help): p
+## Disk /dev/sda: 11721045168 sectors, 5.5 TiB
+## Logical sector size: 512 bytes
+## Disk identifier (GUID): AA739863-D3C2-41AE-8988-XXXXXXXXXXXX
+## Partition table holds up to 128 entries
+## First usable sector is 34, last usable sector is 11721045134
+## Partitions will be aligned on 2048-sector boundaries
+## Total free space is 11720504429 sectors (5.5 TiB)
+##
+## Number  Start (sector)    End (sector)  Size       Code  Name
+##    1            8192           24575   8.0 MiB     8300  Linux filesystem
+##    2           32768          557055   256.0 MiB   8300  Linux filesystem
+##
+Command (? for help): w #-> save changes
+##
+## Final checks complete. About to write GPT data. THIS WILL OVERWRITE EXISTING
+## PARTITIONS!!
+##
+Do you want to proceed? (Y/N): y
+## OK; writing new GUID partition table (GPT) to /dev/sda.
+## Warning: The kernel is still using the old partition table.
+## The new table will be used at the next reboot or after you
+## run partprobe(8) or kpartx(8)
+## The operation has completed successfully.
+##
+
+# Here we create a swap of 4Gb (4096MiB)
+# Since we have a partition of 8MiB that is the boot of uImage uboot and the rootfs of 256MiB
+# then we start from 264MiB and 4096MiB + 264MiB are 4360Mib
+# Now we are gonna create additional 3rd partition for data:
+
+root@LEDE:~#  gdisk /dev/sda
+## GPT fdisk (gdisk) version 1.0.1
+##
+## Partition table scan:
+##   MBR: protective
+##   BSD: not present
+##   APM: not present
+##   GPT: present
+##
+## Found valid GPT with protective MBR; using GPT.
+##
+ Command (? for help): _
+## b	back up GPT data to a file
+## c	change a partition's name
+## d	delete a partition
+## i	show detailed information on a partition
+## l	list known partition types
+## n	add a new partition
+## o	create a new empty GUID partition table (GPT)
+## p	print the partition table
+## q	quit without saving changes
+## r	recovery and transformation options (experts only)
+## s	sort partitions
+## t	change a partition's type code
+## v	verify disk
+## w	write table to disk and exit
+## x	extra functionality (experts only)
+## ?	print this menu
+##
+Command (? for help): n
+Partition number (3-128, default 3):   #-> Enter
+First sector (34-11721045134, default = 557056) or {+-}size{KMGTP}:   #-> Enter
+Last sector (557056-11721045134, default = 11721045134) or {+-}size{KMGTP}:  #-> Enter
+## Current type is 'Linux filesystem'
+Hex code or GUID (L to show codes, Enter = 8300):  #-> Enter
+## Changed type of partition to 'Linux filesystem'
+##
+Command (? for help): p
+## Disk /dev/sda: 11721045168 sectors, 5.5 TiB
+## Logical sector size: 512 bytes
+## Disk identifier (GUID): AA739863-D3C2-41AE-8988-XXXXXXXXXXXX
+## Partition table holds up to 128 entries
+## First usable sector is 34, last usable sector is 11721045134
+## Partitions will be aligned on 2048-sector boundaries
+## Total free space is 16350 sectors (8.0 MiB)
+##
+## Number  Start (sector)    End (sector)  Size       Code  Name
+##    1            8192           24575   8.0 MiB     8300  Linux filesystem
+##    2           32768          557055   256.0 MiB   8300  Linux filesystem
+##    3          557056     11721045134   5.5 TiB     8300  Linux filesystem
+##
+Command (? for help): w
+##
+## Final checks complete. About to write GPT data. THIS WILL OVERWRITE EXISTING
+## PARTITIONS!!
+##
+## Do you want to proceed? (Y/N): y
+## OK; writing new GUID partition table (GPT) to /dev/sda.
+## Warning: The kernel is still using the old partition table.
+## The new table will be used at the next reboot or after you
+## run partprobe(8) or kpartx(8)
+## The operation has completed successfully.
+
+reboot
+
+# ------------------------------------------------------------------------------------
+# Swap
+# ------------------------------------------------------------------------------------
+
+# We enable swap partition (we should add it later also to fstab too in order to work on reboots)
+mkswap -L swap /dev/sda3
+swapon /dev/sda3
+
+uci add fstab swap
+uci set fstab.@swap[-1].enabled='1'
+uci set fstab.@swap[-1].device='/dev/sda3'
+uci commit fstab # always remember to commit changes before reboot
+# uci set fstab.@swap[-1].device='rw,sync,noatime' # I don't know is this is needed or not
+
+# ------------------------------------------------------------------------------------
+# Data partition
+# ------------------------------------------------------------------------------------
+opkg update
+opkg install kmod-fs-ext4 e2fsprogs block-mount
+
+# We format ext4 the 3rd partition and we assign a label
+time mkfs.ext4 -L Data /dev/sda3 # 32m 42.47s in MyBookLive Single disk 6TB Purple
+
+# We create mount point for ext4 3rd partition.
+mkdir -p /mnt/Data
+
+# We mount ext4 (if it was powered of in improper way it will be slower about 22seg, if not 0.5seg)
+time mount -v -o sync /dev/sda3 /mnt/Data
+
+# Unmount ext4 data partition
+time umount -v /mnt/Data/
+
+
+uci set fstab.@global[0].check_fs='1' # This will run a fsck (like chkdsk) at startup
+
+uci add fstab mount
+uci set fstab.@mount[-1].target='/mnt/Data'
+uci set fstab.@mount[-1].device='/dev/sda4'
+#uci get fstab.@mount[-1].uuid # will have a value like this: 'd5d107df-316d-4007-8727-XXXXXXXXXXX', do not modify it!
+uci set fstab.@mount[-1].enabled='1'
+uci set fstab.@mount[-1].enabled_fsck='1'
+uci set fstab.@mount[-1].options='rw,sync,noatime,nodiratime'
+
+# daemon.warn netifd: You have delegated IPv6-prefixes but haven't assigned them to any interface. Did you forget to set option ip6assign on your lan-interfaces?
+uci del network.globals
+#uci set network.globals=globals
+#uci set network.globals.ula_prefix='fdff:9b13:359d::/48'
+
+# ------------------------------------------------------------------------------------
+# Status Led's.
+# ------------------------------------------------------------------------------------
+
+uci del system.@led[-1] # delete the default one
+
+uci add system led
+uci set system.@led[-1].name='Alive'
+uci set system.@led[-1].sysfs='mbl:blue:power'
+uci set system.@led[-1].default='0'
+uci set system.@led[-1].trigger='timer'
+uci set system.@led[-1].delayon='1000'
+uci set system.@led[-1].delayoff='500'
+
+uci add system led
+uci set system.@led[-1].name='DiskUsage'
+uci set system.@led[-1].sysfs='mbl:green:power'
+uci set system.@led[-1].default='0'
+uci set system.@led[-1].trigger='disk-activity'
+
+# Additional if we want to manually turn on red Led on some Error.
+uci add system led
+uci set system.@led[-1].name='Error'
+uci set system.@led[-1].sysfs='mbl:red:power'
+uci set system.@led[-1].default='0'
+uci set system.@led[-1].trigger='default-on'
+
+# ------------------------------------------------------------------------------------
+# SMB Samba Server Share - Initial Configuration
+# ------------------------------------------------------------------------------------
+# For more info you see also: https://wiki.openwrt.org/doc/uci/samba
+# For more info you see also: https://wiki.openwrt.org/doc/howto/cifs.server
+
+opkg update
+opkg install samba36-server
+opkg install luci-app-samba # is not needed
+# If it is NTFS, on /etc/fstab? : 'iocharset' 'utf8' y 'codepage' 'cp850'
+
+# luci-app-samba is not needed but if you install it you should clean luci cache or uhttpd restart or reboot to be able to use it.
+rm /tmp/luci-indexcache # or uhttpd restart
+/etc/init.d/uhttpd restart # or reboot
+
+cat /etc/samba/smb.conf.template
+cp /etc/samba/smb.conf.template ~/etc-samba-smb.conf.template
+
+# This file we try to change sendfile=no (previously it says 'yes')
+echo '[global]
+	netbios name = |NAME|
+	display charset = |CHARSET|
+	interfaces = |INTERFACES|
+	server string = |DESCRIPTION|
+	unix charset = |CHARSET|
+	workgroup = |WORKGROUP|
+	local master = no
+	browseable = yes
+	deadtime = 30
+	domain master = yes
+	encrypt passwords = yes
+	enable core files = no
+	guest ok = yes
+	invalid users = root
+	load printers = no
+	map to guest = Bad User
+	max protocol = SMB2
+	min receivefile size = 16384
+	null passwords = yes
+	passdb backend = smbpasswd
+	preferred master = yes
+	security = user
+	smb passwd file = /etc/samba/smbpasswd
+	syslog = 2
+	; Changed this line from no to yes:
+	use sendfile = yes
+	writeable = yes
+	bind interfaces only = yes' > /etc/samba/smb.conf.template
+# Commented lines already exists on default install
+#uci set samba.@samba[0]=samba
+#uci set samba.@samba[0].name='OpenWrt'
+#uci set samba.@samba[0].workgroup='WORKGROUP'
+#uci set samba.@samba[0].description='Samba on OpenWrt'
+uci set samba.@samba[0].homes='0' # by default is '0'
+#uci set samba.@samba[0].charset='UTF-8' # by default is empty, it is better to use utf-8, but on the wiki of openwrt it uses 'ISO-8859-1'
+uci add samba sambashare
+uci set samba.@sambashare[-1].name='data'
+uci set samba.@sambashare[-1].path='/mnt/Data'
+uci set samba.@sambashare[-1].read_only='no' # 'yes' # read only
+uci set samba.@sambashare[-1].guest_ok='yes' # access without password, it needs to put security=share or ¿use guest account?
+uci set samba.@sambashare[-1].browsable='no' # to not show when browsing the network
+# (below is the way to use with password / authentication)
+#uci set samba.@sambashare[-1].guest_ok='no' # password accessed, by default is 'no'
+#uci set samba.@sambashare[-1].users='root'
+#uci set samba.@sambashare[-1].create_mask='0744' # by default is empty
+#uci set samba.@sambashare[-1].dir_mask='0755' # by default is empty
+
+chmod a+w /mnt/Data
+#chmod -R 777 /mnt/Data # it seems that is not needed
+#chown -R nobody /mnt/Data # it seems that is not needed
+uci commit samba
+/etc/init.d/samba restart
+
+chmod a+w /mnt/Data -R
+
+# to try it now from Windows, will be something like:
+\\192.168.1.25\data
+# to try it now from MacOS, will be something like:
+smb://192.168.1.25/data
+
+# ------------------------------------------------------------------------------------
+# SMB Samba Server Share - With Authentication
+# ------------------------------------------------------------------------------------
+# There is two ways to connect to Samba:
+# Allow free access to the share 'guest_ok=yes' or create users and assign passwords to them using smbpasswd:
+
+# How to add a new user called 'newuser' (and later assign a samba password)
+echo 'newuser:*:1000:65534:newuser:/var:/bin/false' > /etc/passwd # or use
+# Another way is to add a user using 'useradd' command:
+opkg install shadow-useradd # it installs also shadow-common
+
+NEWUSER=newuser
+PASS=userpassword
+useradd --no-create-home --shell /bin/false $NEWUSER
+echo -ne "$PASS\n$PASS\n" | smbpasswd -a -s $NEWUSER
+
+# you will have to edit manually this below if you had multiple users:
+uci set samba.@sambashare[-1].users="root $NEWUSER"
+uci set samba.@sambashare[-1].guest_ok='no'
+uci commit samba # commit configuration
+/etc/init.d/samba restart # restart to load changes
+
+# Configurations not tryed yet:
+	syslog = 10
+	obey pam restrictions = yes
+	socket options = TCP_NODELAY
+    local master = yes
+	os level = 20
+	guest account = nobody
+
+echo '[global]
+	netbios name = |NAME|
+	display charset = |CHARSET|
+	interfaces = |INTERFACES|
+	server string = |DESCRIPTION|
+	unix charset = |CHARSET|
+	workgroup = |WORKGROUP|
+	local master = no
+	browseable = yes
+	deadtime = 30
+	domain master = yes
+	encrypt passwords = yes
+	enable core files = no
+	guest ok = yes
+; Commented this below line:
+	;invalid users = root
+	load printers = no
+	map to guest = Bad User
+	max protocol = SMB2
+	min receivefile size = 16384
+	null passwords = yes
+	passdb backend = smbpasswd
+	preferred master = yes
+	security = user
+	smb passwd file = /etc/samba/smbpasswd
+; Changed this below line from 2 to 10:
+	syslog = 10
+; Changed this line from yes to no:
+	use sendfile = no
+	writeable = yes
+	bind interfaces only = yes
+; Added this line below:
+	socket options = TCP_NODELAY
+	' > /etc/samba/smb.conf.template
+
+/etc/init.d/samba restart
+cat /var/etc/smb.conf
+
+# ------------------------------------------------------------------------------------
+# System Datetime TimeZone, misc, write down yours here
+# ------------------------------------------------------------------------------------
+
+uci del system.ntp.enable_server
+uci set system.@system[0].conloglevel='8'
+uci set system.@system[0].cronloglevel='8'
+uci set system.@system[0].log_proto='udp'
+uci set system.@system[0].timezone='<-03>3'
+uci set system.@system[0].zonename='America/Argentina/Buenos Aires'
+
+
+# ------------------------------------------------------------------------------------
+# Rsync daemon, useful for copying files around from-to another OpenWrt/Linux/Unix/Mac
+# ------------------------------------------------------------------------------------
+opkg update; opkg install rsyncd
+
+
+# ------------------------------------------------------------------------------------
+# Mount exfat
+# ------------------------------------------------------------------------------------
+opkg update; opkg install kmod-fs-exfat
+
+# ------------------------------------------------------------------------------------
+# SmartDrive Checking
+# ------------------------------------------------------------------------------------
+
+opkg install smartmontools
+smartctl -h
+
+
+# Get S.M.A.R.T. error log:
+smartctl /dev/sda -l error
+# Start a short self test:
+smartctl /dev/sda -t short
+# Start a long self test:
+smartctl /dev/sda -t long
+
+# Run bad blocks scan:
+# badblocks -n /dev/sda # it does not work on disks with more than (5860522584): must be 32-bit value
+# Tip: use screen or tmux (opkg install tmux) to keep process alive after exiting the termina
+
+smartctl --all /dev/sda
+
+## Model Family:     Western Digital Purple
+## Device Model:     WDC WD60PURX-XXXXXX
+## Serial Number:    WD-WX11DXXXXXX
+## LU WWN Device Id: 5 XXXXXX XXXXXX
+## Firmware Version: 80.00A80
+## User Capacity:    6,001,175,126,016 bytes [6.00 TB]
+## Sector Sizes:     512 bytes logical, 4096 bytes physical
+## Rotation Rate:    5700 rpm
+## Device is:        In smartctl database [for details use: -P show]
+## ATA Version is:   ACS-2, ACS-3 T13/2161-D revision 3b
+## SATA Version is:  SATA 3.1, 6.0 Gb/s (current: 3.0 Gb/s)
+## Local Time is:    Thu Feb  1 00:11:43 2018 ART
+## SMART support is: Available - device has SMART capability.
+## SMART support is: Enabled
+##
+## === START OF READ SMART DATA SECTION ===
+## SMART overall-health self-assessment test result: PASSED
+##
+## General SMART Values:
+## Offline data collection status:  (0x00)	Offline data collection activity
+## 					was never started.
+## 					Auto Offline Data Collection: Disabled.
+## Self-test execution status:      (   0)	The previous self-test routine completed
+## 					without error or no self-test has ever
+## 					been run.
+## Total time to complete Offline
+## data collection: 		( 6164) seconds.
+## Offline data collection
+## capabilities: 			 (0x7b) SMART execute Offline immediate.
+## 					Auto Offline data collection on/off support.
+## 					Suspend Offline collection upon new
+## 					command.
+## 					Offline surface scan supported.
+## 					Self-test supported.
+## 					Conveyance Self-test supported.
+## 					Selective Self-test supported.
+## SMART capabilities:            (0x0003)	Saves SMART data before entering
+## 					power-saving mode.
+## 					Supports SMART auto save timer.
+## Error logging capability:        (0x01)	Error logging supported.
+## 					General Purpose Logging supported.
+## Short self-test routine
+## recommended polling time: 	 (   2) minutes.
+## Extended self-test routine
+## recommended polling time: 	 ( 715) minutes.
+## Conveyance self-test routine
+## recommended polling time: 	 (   5) minutes.
+## SCT capabilities: 	       (0x303d)	SCT Status supported.
+## 					SCT Error Recovery Control supported.
+## 					SCT Feature Control supported.
+## 					SCT Data Table supported.
+##
+## SMART Attributes Data Structure revision number: 16
+## Vendor Specific SMART Attributes with Thresholds:
+## ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
+##   1 Raw_Read_Error_Rate     0x002f   200   200   051    Pre-fail  Always       -       0
+##   3 Spin_Up_Time            0x0027   195   189   021    Pre-fail  Always       -       9250
+##   4 Start_Stop_Count        0x0032   100   100   000    Old_age   Always       -       60
+##   5 Reallocated_Sector_Ct   0x0033   200   200   140    Pre-fail  Always       -       0
+##   7 Seek_Error_Rate         0x002e   200   200   000    Old_age   Always       -       0
+##   9 Power_On_Hours          0x0032   098   098   000    Old_age   Always       -       1579
+##  10 Spin_Retry_Count        0x0032   100   253   000    Old_age   Always       -       0
+##  11 Calibration_Retry_Count 0x0032   100   253   000    Old_age   Always       -       0
+##  12 Power_Cycle_Count       0x0032   100   100   000    Old_age   Always       -       48
+## 192 Power-Off_Retract_Count 0x0032   200   200   000    Old_age   Always       -       43
+## 193 Load_Cycle_Count        0x0032   200   200   000    Old_age   Always       -       60
+## 194 Temperature_Celsius     0x0022   104   079   000    Old_age   Always       -       48
+## 196 Reallocated_Event_Count 0x0032   200   200   000    Old_age   Always       -       0
+## 197 Current_Pending_Sector  0x0032   200   200   000    Old_age   Always       -       0
+## 198 Offline_Uncorrectable   0x0030   100   253   000    Old_age   Offline      -       0
+## 199 UDMA_CRC_Error_Count    0x0032   200   200   000    Old_age   Always       -       0
+## 200 Multi_Zone_Error_Rate   0x0008   100   253   000    Old_age   Offline      -       0
+##
+## SMART Error Log Version: 1
+## No Errors Logged
+##
+## SMART Self-test log structure revision number 1
+## No self-tests have been logged.  [To run self-tests, use: smartctl -t]
+##
+## SMART Selective self-test log data structure revision number 1
+##  SPAN  MIN_LBA  MAX_LBA  CURRENT_TEST_STATUS
+##     1        0        0  Not_testing
+##     2        0        0  Not_testing
+##     3        0        0  Not_testing
+##     4        0        0  Not_testing
+##     5        0        0  Not_testing
+## Selective self-test flags (0x0):
+##   After scanning selected spans, do NOT read-scan remainder of disk.
+## If Selective self-test is pending on power-up, resume after 0 minute delay.
+
+smartctl --smart=on --offlineauto=on --saveauto=on /dev/sda
+## smartctl 6.5 2016-05-07 r4318 [ppc-linux-4.4.92] (localbuild)
+## Copyright (C) 2002-16, Bruce Allen, Christian Franke, www.smartmontools.org
+##
+## === START OF ENABLE/DISABLE COMMANDS SECTION ===
+## SMART Enabled.
+## SMART Attribute Autosave Enabled.
+## SMART Automatic Offline Testing Enabled every four hours.
+
+smartctl --smart=on --offlineauto=off --saveauto=off /dev/sda
+## smartctl 6.5 2016-05-07 r4318 [ppc-linux-4.4.92] (localbuild)
+## Copyright (C) 2002-16, Bruce Allen, Christian Franke, www.smartmontools.org
+##
+## === START OF ENABLE/DISABLE COMMANDS SECTION ===
+## SMART Enabled.
+## SMART Attribute Autosave Disabled.
+## SMART Automatic Offline Testing Disabled.
+
+smartctl -d sat /dev/sda -l scttemp |grep Temperature
+## Current Temperature:                    50 Celsius
+## Power Cycle Min/Max Temperature:     43/59 Celsius
+## Lifetime    Min/Max Temperature:     21/73 Celsius
+## Under/Over Temperature Limit Count:   0/0
+## SCT Temperature History Version:     2
+## Temperature Sampling Period:         1 minute
+## Temperature Logging Interval:        1 minute
+## Min/Max recommended Temperature:      0/60 Celsius
+## Min/Max Temperature Limit:           -41/85 Celsius
+## Temperature History Size (Index):    478 (144)
+## Index    Estimated Time   Temperature Celsius
+
+
+smartctl -d sat /dev/sda -l scttemp
+smartctl -d sat /dev/sda -l scttemp --xall
+
+# ------------------------------------------------------------------------------------
+# Spin-down using hd-idle
+# It works perfectly, it wakes up when you access on samba and it goes sleep after 10 minutes
+# ------------------------------------------------------------------------------------
+opkg install hd-idle
+uci set hd-idle.@hd-idle[0].enabled='1'
+uci set hd-idle.@hd-idle[0].idle_time_interval='10'
+/etc/init.d/hd-idle enable
+/etc/init.d/hd-idle start
+
+# ------------------------------------------------------------------------------------
+# Spin-down checking using hdparm (or manually triggered)
+# ------------------------------------------------------------------------------------
+
+opkg install hdparm
+hdparm --help
+
+hdparm -y /dev/sda  # Put drive in standby mode (spin off)
+hdparm -Y /dev/sda  # Put drive to sleep (creo q hace lo mismo q stand by)
+
+hdparm -C /dev/sda  # Check drive power mode status
+
+hdparm -g /dev/sda  # Display drive geometry
+hdparm -i /dev/sda  # Display drive identification
+hdparm -I /dev/sda  # Detailed/current information directly from drive
+hdparm -t /dev/sda  # Perform device read timings
+hdparm -T /dev/sda  # Perform cache read timings
+
+hdparm --dco-identify /dev/sda   # Read/dump device configuration identify data
+# hdparm --idle-immediate /dev/sda # Idle drive immediately
+hdparm --idle-unload /dev/sda    # Idle immediately and unload heads
+
+
+hdparm -y /dev/sda  # Put drive in standby mode (spin off)
+
+hdparm -y /dev/sdb  # Put drive in standby mode (spin off)
+
+hdparm -y /dev/sda; echo freeze > /sys/power/state # It cames back after a few seconds.
+
+# -----------------------------------------------------------------------------------------------
+# DLNA Server: For serve media files to Smart TV's or other compatible DLNA-UPNP Media Receivers
+# -----------------------------------------------------------------------------------------------
+
+opkg update
+opkg install luci-app-minidlna
+opkg install file #libmagic (to detect corectly the filetypes)
+
+uci del minidlna.config.enable_tivo
+uci del minidlna.config.strict_dlna
+uci set minidlna.config.interface='br-lan' # if lan is type='bridged0
+uci set minidlna.config.interface='eth0' # if lan is NOT bridged
+uci set minidlna.config.friendly_name='WDMyBookLive DLNA Server'
+# uci set minidlna.config.strict_dlna='yes' # it suppose that if it strict will fit big jpeg files (currently testing on my TV)
+uci del minidlna.config.media_dir
+uci add_list minidlna.config.media_dir='/mnt/Data/dlna' # Chose the directory you want.
+uci commit minidlna
+
+/etc/init.d/minidlna enable # Enable service
+/etc/init.d/minidlna start # Start service
+/etc/init.d/minidlna reload # Reload (use when you update some setting)
+/etc/init.d/minidlna restart # Restart (use when you update some setting)
+
+# Status Page:
+http://192.168.1.25:8200/
+
+# The minidlna it could be build using a PC, this is useful when you have MANY files and low RAM (MBL have just 128mb):
+https://wiki.openwrt.org/doc/uci/minidlna
+
+```
